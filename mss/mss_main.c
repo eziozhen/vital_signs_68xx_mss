@@ -441,11 +441,12 @@ static void MmwDemo_mboxReadTask(UArg arg0, UArg arg1)
                         UART_writePolling (gMmwMssMCB.loggingUartHandle,
                                            (uint8_t*)&message.body.detObj.tlv[itemIdx],
                                            sizeof(MmwDemo_output_message_tl));
-                        UART_writePolling (gMmwMssMCB.loggingUartHandle,
-                                           (uint8_t*)SOC_translateAddress(message.body.detObj.tlv[itemIdx].address,
-                                                                          SOC_TranslateAddr_Dir_FROM_OTHER_CPU,NULL),
-                                           message.body.detObj.tlv[itemIdx].length);
-                        totalPacketLen += sizeof(MmwDemo_output_message_tl) + message.body.detObj.tlv[itemIdx].length;
+                        // UART_writePolling (gMmwMssMCB.loggingUartHandle,
+                        //                    (uint8_t*)SOC_translateAddress(message.body.detObj.tlv[itemIdx].address,
+                        //                                                   SOC_TranslateAddr_Dir_FROM_OTHER_CPU,NULL),
+                        //                    message.body.detObj.tlv[itemIdx].length);
+                        // totalPacketLen += sizeof(MmwDemo_output_message_tl) + message.body.detObj.tlv[itemIdx].length;
+                        totalPacketLen += sizeof(MmwDemo_output_message_tl);
                     }
 
                     /* Send padding to make total packet length multiple of MMWDEMO_OUTPUT_MSG_SEGMENT_LEN */
