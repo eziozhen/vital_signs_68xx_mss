@@ -157,8 +157,14 @@ typedef struct MmwDemo_MSS_STATS_t
 
 
 
+typedef struct {
+    uint32_t magicWord;  // 4字节，用于同步
+    uint32_t payloadLen; // 4字节，表示后面跟着多少数据
+} MmwDemo_SpiStartHeader;
 
-
+typedef struct {
+    uint32_t magicWord;  // 4字节，用于同步
+} MmwDemo_SpiEndHeader;
 
 
 /**

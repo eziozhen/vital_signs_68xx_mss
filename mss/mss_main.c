@@ -147,10 +147,17 @@ void MmwDemo_sleep(void);
 
 /* DSS to MSS exception signalling ISR */
 static void MmwDemo_installDss2MssExceptionSignallingISR(void);
+static void MmwDemo_busyWait_us(uint32_t count);
 
 /**************************************************************************
  ************************* Millimeter Wave Demo Functions **********************
  **************************************************************************/
+
+static void MmwDemo_busyWait_us(uint32_t count)
+{
+    volatile uint32_t i;
+    for (i = 0; i < count; i++) { }
+}
 
 /**
  *  @b Description
@@ -441,14 +448,39 @@ static void MmwDemo_mboxReadTask(UArg arg0, UArg arg1)
             {
                 case MMWDEMO_DSS2MSS_DETOBJ_READY:
                 {
-                    uint8_t* mappedBaseAddr = (uint8_t*)SOC_translateAddress(message.body.detObj.tlv[0].address,
+                    uint8_t* mappedBaseAddr = (uint8_t*)SOC_translateAddress((uint32_t)message.body.detObj.tlv[0].address,
                                                                             SOC_TranslateAddr_Dir_FROM_OTHER_CPU,
                                                                             NULL);
                     if (SPIHandle != NULL) {
                         SPI_Transaction transaction;
                         uint32_t totalBytesToSend = message.body.detObj.tlv[0].length;
-                        uint32_t chunkSize = SPI_DATA_BLOCK_SIZE; /* 假设 1024 */
+                        uint32_t chunkSize = SPI_DATA_BLOCK_SIZE;
                         uint32_t bytesSent = 0;
+                        bool transferError = false;
+
+                        // uint16_t dummyByte = 0xFFFF;
+                        // transaction.txBuf = &dummyByte;
+                        // transaction.count = 2;
+                        // SPI_transfer(SPIHandle, &transaction);
+
+                        // MmwDemo_busyWait_us(10); 
+
+                        MmwDemo_SpiStartHeader start_header;
+                        start_header.magicWord = 0xAA55AA55;
+                        start_header.payloadLen = totalBytesToSend;
+
+                        transaction.count = sizeof(MmwDemo_SpiStartHeader);
+                        transaction.txBuf = (void*)&start_header;
+                        transaction.rxBuf = NULL;
+                        transaction.slaveIndex = (uint16_t)0U;
+
+                        if (SPI_transfer(SPIHandle, &transaction) != true)
+                        {
+                            transferError = true;
+                            // System_printf("Error: Header send failed\n");
+                        }
+
+                        // MmwDemo_busyWait_us(10000); 
 
                         /* 使用 for 循环来分块发送数据 */
                         for (bytesSent = 0; bytesSent < totalBytesToSend; bytesSent += chunkSize)
@@ -471,14 +503,43 @@ static void MmwDemo_mboxReadTask(UArg arg0, UArg arg1)
                             /* 启动 DMA 传输 (这将阻塞，直到此块完成) */
                             if (SPI_transfer(SPIHandle, &transaction) != true)
                             {
+                                transferError = true;
                                 // CLI_write("Error: SPI_transfer failed for chunk at offset %u\n", bytesSent);
                                 break; /* 传输失败，跳出循环 */
                             }
+                            // MmwDemo_busyWait_us(10000); 
                         }
+
+                        MmwDemo_SpiEndHeader end_header;
+                        if (!transferError)
+                        {
+                            end_header.magicWord = 0xEDEDEDED;
+                        }
+                        else
+                        {
+                            end_header.magicWord = 0xDEADBEEF;
+                        }
+                        
+                        transaction.count = sizeof(MmwDemo_SpiEndHeader);
+                        transaction.txBuf = (void*)&end_header;
+                        transaction.rxBuf = NULL;
+                        transaction.slaveIndex = (uint16_t)0U;
+
+                        if (SPI_transfer(SPIHandle, &transaction) != true)
+                        {
+                            // System_printf("Error: Header send failed\n");
+                        }
+
+                        // transaction.txBuf = &dummyByte;
+                        // transaction.count = 2;
+                        // SPI_transfer(SPIHandle, &transaction);
+
+                        // MmwDemo_busyWait_us(10000);
                     }
                     // /* Got detetced objectes , shipped out through UART */
                     // /* Send header */
-                    // message.body.detObj.header.magicWord[3] = (((SPIHandle != NULL) & 0xFF) << 8) | ((mappedBaseAddr != NULL) & 0xFF);
+                    // message.body.detObj.header.magicWord[3] = (((SPIHandle != NULL) & 0xFF) << 8) | ((DmaHandle != NULL) & 0xFF);
+                    // message.body.detObj.header.magicWord[3] = dmaerrCode;
                     // totalPacketLen = sizeof(MmwDemo_output_message_header);
                     // UART_writePolling (gMmwMssMCB.loggingUartHandle,
                     //                    (uint8_t*)&message.body.detObj.header,
@@ -1205,6 +1266,88 @@ void MmwDemo_mssInitTask(UArg arg0, UArg arg1)
     /* Initialize the Mailbox */
     Mailbox_init(MAILBOX_TYPE_MSS);
 
+
+    /*=======================================
+     * Setup the PINMUX to bring out the MibSpiA
+     *=======================================*/
+    /* NOTE: Please change the following pin configuration according
+            to EVM used for the test */
+
+    /* SPIA_MOSI */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PIND13_PADAD, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PIND13_PADAD, SOC_XWR68XX_PIND13_PADAD_SPIA_MOSI);
+
+    /* SPIA_MISO */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE14_PADAE, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE14_PADAE, SOC_XWR68XX_PINE14_PADAE_SPIA_MISO);
+
+    /* SPIA_CLK */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE13_PADAF, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE13_PADAF, SOC_XWR68XX_PINE13_PADAF_SPIA_CLK);
+
+    /* SPIA_CS */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE15_PADAG, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE15_PADAG, SOC_XWR68XX_PINE15_PADAG_SPIA_CSN);
+
+    /* SPI_HOST_INTR - not used, reference code */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINP13_PADAA, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINP13_PADAA, SOC_XWR68XX_PINP13_PADAA_SPI_HOST_INTR);
+
+    // /* SPIA DMA and interrupt signals are muxed with other IPs in the SOC.
+    //  * Map them to SPIA.
+    //  */
+    // if (SOC_selectDMARequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+    // {
+    //     return;
+    // }
+    // if (SOC_selectInterruptRequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+    // {
+    //     return;
+    // }
+
+    // DMA_init();
+
+    // DMA_Params      dmaParams;
+    // /* Init SYSDMA params */
+    // DMA_Params_init(&dmaParams);
+
+    // /* Open DMA driver instance 1 for SPI test */
+    // DmaHandle = DMA_open(0, &dmaParams, &dmaerrCode);
+    // if(DmaHandle == NULL)
+    // {
+    //     printf("Open DMA driver failed with error=%d\n", errCode);
+    //     return;
+    // }
+    /* Initialize the SPI */
+    SPI_init();
+
+    SPI_Params     params;
+    /* Setup the default SPI Parameters */
+    SPI_Params_init(&params);
+
+    /* Enable DMA and set DMA channels to be used */
+    params.dmaEnable = (uint8_t)0;
+    // params.dmaHandle = gMmwMssMCB.DmaHandle;
+    params.transferMode = SPI_MODE_BLOCKING;
+    params.eccEnable = 1;
+    params.dataSize = 16U;
+
+    params.frameFormat = SPI_POL0_PHA1;
+    params.mode = SPI_MASTER;
+    params.u.masterParams.numSlaves = 1;
+    params.u.masterParams.slaveProf[0].chipSelect = 0;
+    params.u.masterParams.slaveProf[0].ramBufLen = MIBSPI_RAM_MAX_ELEM;
+    params.u.masterParams.slaveProf[0].dmaCfg.txDmaChanNum =0xFF;
+    params.u.masterParams.slaveProf[0].dmaCfg.rxDmaChanNum =0xFF;
+
+    params.u.masterParams.bitRate = 36000000U;
+    /* Open the SPI Instance for MibSpi */
+    SPIHandle = SPI_open(0U, &params);
+    if (SPIHandle == NULL)
+    {
+        return;
+    }
+
     /*****************************************************************************
      * Open & configure the drivers:
      *****************************************************************************/
@@ -1236,85 +1379,6 @@ void MmwDemo_mssInitTask(UArg arg0, UArg arg1)
     if (gMmwMssMCB.loggingUartHandle == NULL)
     {
         System_printf("Error: MMWDemoMSS Unable to open the Logging UART Instance\n");
-        return;
-    }
-
-    /*=======================================
-     * Setup the PINMUX to bring out the MibSpiA
-     *=======================================*/
-    /* NOTE: Please change the following pin configuration according
-            to EVM used for the test */
-
-    /* SPIA_MOSI */
-    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PIND13_PADAD, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
-    Pinmux_Set_FuncSel(SOC_XWR68XX_PIND13_PADAD, SOC_XWR68XX_PIND13_PADAD_SPIA_MOSI);
-
-    /* SPIA_MISO */
-    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE14_PADAE, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
-    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE14_PADAE, SOC_XWR68XX_PINE14_PADAE_SPIA_MISO);
-
-    /* SPIA_CLK */
-    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE13_PADAF, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
-    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE13_PADAF, SOC_XWR68XX_PINE13_PADAF_SPIA_CLK);
-
-    /* SPIA_CS */
-    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE15_PADAG, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
-    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE15_PADAG, SOC_XWR68XX_PINE15_PADAG_SPIA_CSN);
-
-    /* SPI_HOST_INTR - not used, reference code */
-    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINP13_PADAA, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
-    Pinmux_Set_FuncSel(SOC_XWR68XX_PINP13_PADAA, SOC_XWR68XX_PINP13_PADAA_SPI_HOST_INTR);
-
-    /* SPIA DMA and interrupt signals are muxed with other IPs in the SOC.
-     * Map them to SPIA.
-     */
-    if (SOC_selectDMARequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
-    {
-        return;
-    }
-    if (SOC_selectInterruptRequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
-    {
-        return;
-    }
-
-    // DMA_Params      dmaParams;
-    // /* Init SYSDMA params */
-    // DMA_Params_init(&dmaParams);
-
-    // /* Open DMA driver instance 1 for SPI test */
-    // DmaHandle = DMA_open(0, &dmaParams, &errCode);
-    // if(DmaHandle == NULL)
-    // {
-    //     printf("Open DMA driver failed with error=%d\n", errCode);
-    //     return;
-    // }
-    /* Initialize the SPI */
-    SPI_init();
-
-    SPI_Params     params;
-    /* Setup the default SPI Parameters */
-    SPI_Params_init(&params);
-
-    /* Enable DMA and set DMA channels to be used */
-    params.dmaEnable = (uint8_t)0;
-    // params.dmaHandle = gMmwMssMCB.DmaHandle;
-    params.transferMode = SPI_MODE_BLOCKING;
-    params.eccEnable = 1;
-    // params.dataSize = 16U;
-
-    params.frameFormat = SPI_POL0_PHA0;
-    params.mode = SPI_MASTER;
-    params.u.masterParams.numSlaves = 1;
-    params.u.masterParams.slaveProf[0].chipSelect = 0;
-    params.u.masterParams.slaveProf[0].ramBufLen = MIBSPI_RAM_MAX_ELEM;
-    params.u.masterParams.slaveProf[0].dmaCfg.txDmaChanNum =0xFF;
-    params.u.masterParams.slaveProf[0].dmaCfg.rxDmaChanNum =0xFF;
-
-    params.u.masterParams.bitRate = 40000000U;
-    /* Open the SPI Instance for MibSpi */
-    SPIHandle = SPI_open(0U, &params);
-    if (SPIHandle == NULL)
-    {
         return;
     }
 
