@@ -29,7 +29,7 @@
                             </option>
                             <option id="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION.1243897002" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_CODEGEN_VERSION" value="16.9.6.LTS" valueType="string"/>
                             <targetPlatform id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.targetPlatformDebug.831274890" name="Platform" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.targetPlatformDebug"/>
-                            <builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.builderDebug.289395001" name="GNU Make.Debug" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.builderDebug"/>
+                            <builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.builderDebug.289395001" keepEnvironmentInBuildfile="false" name="GNU Make" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.builderDebug"/>
                             <tool id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.compilerDebug.118630237" name="Arm Compiler" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.exe.compilerDebug">
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.CODE_STATE.1795373613" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.CODE_STATE" value="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.CODE_STATE.16" valueType="enumerated"/>
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.SILICON_VERSION.1866889016" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.SILICON_VERSION" value="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.SILICON_VERSION.7R4" valueType="enumerated"/>
@@ -94,6 +94,7 @@
                                     <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/drivers/osal/lib"/>
                                     <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/drivers/pinmux/lib"/>
                                     <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/drivers/soc/lib"/>
+                                    <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/drivers/spi/lib"/>
                                     <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/drivers/uart/lib"/>
                                     <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/utils/mathutils/lib"/>
                                     <listOptionValue value="${COM_TI_MMWAVE_SDK_INSTALL_DIR}/packages/ti/utils/cli/lib"/>
@@ -110,6 +111,7 @@
                                     <listOptionValue value="libsoc_xwr68xx.aer4f"/>
                                     <listOptionValue value="libpinmux_xwr68xx.aer4f"/>
                                     <listOptionValue value="libcrc_xwr68xx.aer4f"/>
+                                    <listOptionValue value="libspi_xwr68xx.aer4f"/>
                                     <listOptionValue value="libuart_xwr68xx.aer4f"/>
                                     <listOptionValue value="libmailbox_xwr68xx.aer4f"/>
                                     <listOptionValue value="libmmwavelink_xwr68xx.aer4f"/>
@@ -153,6 +155,9 @@
                             </tool>
                         </toolChain>
                     </folderInfo>
+                    <sourceEntries>
+                        <entry excluding="mss/src" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                    </sourceEntries>
                 </configuration>
             </storageModule>
             <storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
@@ -309,6 +314,9 @@
                             </tool>
                         </toolChain>
                     </folderInfo>
+                    <sourceEntries>
+                        <entry excluding="mss/src" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+                    </sourceEntries>
                 </configuration>
             </storageModule>
             <storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>

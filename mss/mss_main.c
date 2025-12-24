@@ -74,6 +74,7 @@
 #include <ti/drivers/soc/soc.h>
 #include <ti/drivers/esm/esm.h>
 #include <ti/drivers/crc/crc.h>
+#include <ti/drivers/spi/SPI.h>
 #include <ti/drivers/uart/UART.h>
 #include <ti/drivers/gpio/gpio.h>
 #include <ti/drivers/mailbox/mailbox.h>
@@ -86,6 +87,14 @@
 #include "mss_mmw.h"
 #include "mmw_messages.h"
 
+
+#ifdef SPI_MULT_ICOUNT_SUPPORT
+ /* Block size used for the test*/
+#define SPI_DATA_BLOCK_SIZE     1024
+#else
+ /* Block size used for the test*/
+#define SPI_DATA_BLOCK_SIZE     128
+#endif
 
 /**************************************************************************
  *************************** Local Definitions ****************************
@@ -100,6 +109,9 @@
  *  Global Variable for tracking information required by the mmw Demo
  */
 MmwDemo_MCB    gMmwMssMCB;
+
+DMA_Handle     DmaHandle = NULL;
+SPI_Handle     SPIHandle = NULL;
 
 /**************************************************************************
  *************************** Extern Definitions *******************************
@@ -428,37 +440,74 @@ static void MmwDemo_mboxReadTask(UArg arg0, UArg arg1)
             switch (message.type)
             {
                 case MMWDEMO_DSS2MSS_DETOBJ_READY:
-                    /* Got detetced objectes , shipped out through UART */
-                    /* Send header */
-                    totalPacketLen = sizeof(MmwDemo_output_message_header);
-                    UART_writePolling (gMmwMssMCB.loggingUartHandle,
-                                       (uint8_t*)&message.body.detObj.header,
-                                       sizeof(MmwDemo_output_message_header));
+                {
+                    uint8_t* mappedBaseAddr = (uint8_t*)SOC_translateAddress(message.body.detObj.tlv[0].address,
+                                                                            SOC_TranslateAddr_Dir_FROM_OTHER_CPU,
+                                                                            NULL);
+                    if (SPIHandle != NULL) {
+                        SPI_Transaction transaction;
+                        uint32_t totalBytesToSend = message.body.detObj.tlv[0].length;
+                        uint32_t chunkSize = SPI_DATA_BLOCK_SIZE; /* 假设 1024 */
+                        uint32_t bytesSent = 0;
 
-                    /* Send TLVs */
-                    for (itemIdx = 0;  itemIdx < message.body.detObj.header.numTLVs; itemIdx++)
-                    {
-                        UART_writePolling (gMmwMssMCB.loggingUartHandle,
-                                           (uint8_t*)&message.body.detObj.tlv[itemIdx],
-                                           sizeof(MmwDemo_output_message_tl));
-                        // UART_writePolling (gMmwMssMCB.loggingUartHandle,
-                        //                    (uint8_t*)SOC_translateAddress(message.body.detObj.tlv[itemIdx].address,
-                        //                                                   SOC_TranslateAddr_Dir_FROM_OTHER_CPU,NULL),
-                        //                    message.body.detObj.tlv[itemIdx].length);
-                        // totalPacketLen += sizeof(MmwDemo_output_message_tl) + message.body.detObj.tlv[itemIdx].length;
-                        totalPacketLen += sizeof(MmwDemo_output_message_tl);
-                    }
+                        /* 使用 for 循环来分块发送数据 */
+                        for (bytesSent = 0; bytesSent < totalBytesToSend; bytesSent += chunkSize)
+                        {
+                            /* * 重要: 我们不再使用 txBuf，而是直接从您的 gMmwL3 缓冲区发送！
+                            * 注意: 这假设 gMmwL3 是一个 uint8_t 数组或指针。
+                            * &gMmwL3[bytesSent] 计算指向当前数据块的指针。
+                            */
+                            uint32_t currentBlockSize = chunkSize;
+                            if ((bytesSent + chunkSize) > totalBytesToSend)
+                            {
+                                currentBlockSize = totalBytesToSend - bytesSent;
+                            }
+                            /* 配置 SPI 传输事务 */
+                            transaction.count = currentBlockSize;
+                            transaction.txBuf = mappedBaseAddr + bytesSent;
+                            transaction.rxBuf = NULL;
+                            transaction.slaveIndex = (uint16_t)0U;
 
-                    /* Send padding to make total packet length multiple of MMWDEMO_OUTPUT_MSG_SEGMENT_LEN */
-                    numPaddingBytes = MMWDEMO_OUTPUT_MSG_SEGMENT_LEN - (totalPacketLen & (MMWDEMO_OUTPUT_MSG_SEGMENT_LEN-1));
-                    if (numPaddingBytes<MMWDEMO_OUTPUT_MSG_SEGMENT_LEN)
-                    {
-                        uint8_t padding[MMWDEMO_OUTPUT_MSG_SEGMENT_LEN];
-                        /*DEBUG:*/ memset(&padding, 0xf, MMWDEMO_OUTPUT_MSG_SEGMENT_LEN);
-                        UART_writePolling (gMmwMssMCB.loggingUartHandle,
-                                            padding,
-                                            numPaddingBytes);
+                            /* 启动 DMA 传输 (这将阻塞，直到此块完成) */
+                            if (SPI_transfer(SPIHandle, &transaction) != true)
+                            {
+                                // CLI_write("Error: SPI_transfer failed for chunk at offset %u\n", bytesSent);
+                                break; /* 传输失败，跳出循环 */
+                            }
+                        }
                     }
+                    // /* Got detetced objectes , shipped out through UART */
+                    // /* Send header */
+                    // message.body.detObj.header.magicWord[3] = (((SPIHandle != NULL) & 0xFF) << 8) | ((mappedBaseAddr != NULL) & 0xFF);
+                    // totalPacketLen = sizeof(MmwDemo_output_message_header);
+                    // UART_writePolling (gMmwMssMCB.loggingUartHandle,
+                    //                    (uint8_t*)&message.body.detObj.header,
+                    //                    sizeof(MmwDemo_output_message_header));
+
+                    // /* Send TLVs */
+                    // for (itemIdx = 0;  itemIdx < message.body.detObj.header.numTLVs; itemIdx++)
+                    // {
+                    //     UART_writePolling (gMmwMssMCB.loggingUartHandle,
+                    //                        (uint8_t*)&message.body.detObj.tlv[itemIdx],
+                    //                        sizeof(MmwDemo_output_message_tl));
+                    //     // UART_writePolling (gMmwMssMCB.loggingUartHandle,
+                    //     //                    (uint8_t*)SOC_translateAddress(message.body.detObj.tlv[itemIdx].address,
+                    //     //                                                   SOC_TranslateAddr_Dir_FROM_OTHER_CPU,NULL),
+                    //     //                    message.body.detObj.tlv[itemIdx].length);
+                    //     // totalPacketLen += sizeof(MmwDemo_output_message_tl) + message.body.detObj.tlv[itemIdx].length;
+                    //     totalPacketLen += sizeof(MmwDemo_output_message_tl);
+                    // }
+
+                    // /* Send padding to make total packet length multiple of MMWDEMO_OUTPUT_MSG_SEGMENT_LEN */
+                    // numPaddingBytes = MMWDEMO_OUTPUT_MSG_SEGMENT_LEN - (totalPacketLen & (MMWDEMO_OUTPUT_MSG_SEGMENT_LEN-1));
+                    // if (numPaddingBytes<MMWDEMO_OUTPUT_MSG_SEGMENT_LEN)
+                    // {
+                    //     uint8_t padding[MMWDEMO_OUTPUT_MSG_SEGMENT_LEN];
+                    //     /*DEBUG:*/ memset(&padding, 0xf, MMWDEMO_OUTPUT_MSG_SEGMENT_LEN);
+                    //     UART_writePolling (gMmwMssMCB.loggingUartHandle,
+                    //                         padding,
+                    //                         numPaddingBytes);
+                    // }
 
                     /* Send a message to MSS to log the output data */
                     memset((void *)&message, 0, sizeof(MmwDemo_message));
@@ -471,6 +520,7 @@ static void MmwDemo_mboxReadTask(UArg arg0, UArg arg1)
                     }
 
                     break;
+                }
                 case MMWDEMO_DSS2MSS_STOPDONE:
                     /* Post event that stop is done */
                     Event_post(gMmwMssMCB.eventHandleNotify, MMWDEMO_DSS_STOP_COMPLETED_EVT);
@@ -1186,6 +1236,85 @@ void MmwDemo_mssInitTask(UArg arg0, UArg arg1)
     if (gMmwMssMCB.loggingUartHandle == NULL)
     {
         System_printf("Error: MMWDemoMSS Unable to open the Logging UART Instance\n");
+        return;
+    }
+
+    /*=======================================
+     * Setup the PINMUX to bring out the MibSpiA
+     *=======================================*/
+    /* NOTE: Please change the following pin configuration according
+            to EVM used for the test */
+
+    /* SPIA_MOSI */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PIND13_PADAD, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PIND13_PADAD, SOC_XWR68XX_PIND13_PADAD_SPIA_MOSI);
+
+    /* SPIA_MISO */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE14_PADAE, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE14_PADAE, SOC_XWR68XX_PINE14_PADAE_SPIA_MISO);
+
+    /* SPIA_CLK */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE13_PADAF, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE13_PADAF, SOC_XWR68XX_PINE13_PADAF_SPIA_CLK);
+
+    /* SPIA_CS */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINE15_PADAG, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINE15_PADAG, SOC_XWR68XX_PINE15_PADAG_SPIA_CSN);
+
+    /* SPI_HOST_INTR - not used, reference code */
+    Pinmux_Set_OverrideCtrl(SOC_XWR68XX_PINP13_PADAA, PINMUX_OUTEN_RETAIN_HW_CTRL, PINMUX_INPEN_RETAIN_HW_CTRL);
+    Pinmux_Set_FuncSel(SOC_XWR68XX_PINP13_PADAA, SOC_XWR68XX_PINP13_PADAA_SPI_HOST_INTR);
+
+    /* SPIA DMA and interrupt signals are muxed with other IPs in the SOC.
+     * Map them to SPIA.
+     */
+    if (SOC_selectDMARequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+    {
+        return;
+    }
+    if (SOC_selectInterruptRequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+    {
+        return;
+    }
+
+    // DMA_Params      dmaParams;
+    // /* Init SYSDMA params */
+    // DMA_Params_init(&dmaParams);
+
+    // /* Open DMA driver instance 1 for SPI test */
+    // DmaHandle = DMA_open(0, &dmaParams, &errCode);
+    // if(DmaHandle == NULL)
+    // {
+    //     printf("Open DMA driver failed with error=%d\n", errCode);
+    //     return;
+    // }
+    /* Initialize the SPI */
+    SPI_init();
+
+    SPI_Params     params;
+    /* Setup the default SPI Parameters */
+    SPI_Params_init(&params);
+
+    /* Enable DMA and set DMA channels to be used */
+    params.dmaEnable = (uint8_t)0;
+    // params.dmaHandle = gMmwMssMCB.DmaHandle;
+    params.transferMode = SPI_MODE_BLOCKING;
+    params.eccEnable = 1;
+    // params.dataSize = 16U;
+
+    params.frameFormat = SPI_POL0_PHA0;
+    params.mode = SPI_MASTER;
+    params.u.masterParams.numSlaves = 1;
+    params.u.masterParams.slaveProf[0].chipSelect = 0;
+    params.u.masterParams.slaveProf[0].ramBufLen = MIBSPI_RAM_MAX_ELEM;
+    params.u.masterParams.slaveProf[0].dmaCfg.txDmaChanNum =0xFF;
+    params.u.masterParams.slaveProf[0].dmaCfg.rxDmaChanNum =0xFF;
+
+    params.u.masterParams.bitRate = 40000000U;
+    /* Open the SPI Instance for MibSpi */
+    SPIHandle = SPI_open(0U, &params);
+    if (SPIHandle == NULL)
+    {
         return;
     }
 

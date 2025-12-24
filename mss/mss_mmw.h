@@ -43,6 +43,7 @@
 #include <ti/common/mmwave_error.h>
 #include <ti/drivers/soc/soc.h>
 #include <ti/drivers/crc/crc.h>
+#include <ti/drivers/spi/SPI.h>
 #include <ti/drivers/uart/UART.h>
 #include <ti/drivers/pinmux/pinmux.h>
 #include <ti/drivers/esm/esm.h>
