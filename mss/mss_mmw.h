@@ -155,7 +155,26 @@ typedef struct MmwDemo_MSS_STATS_t
 }MmwDemo_MSS_STATS;
 
 
-
+/* SPI Configuration Structure to pass from CLI to Main */
+typedef struct MmwDemo_SpiCliCfg_t
+{
+    uint8_t     isEnable;           /* 1: Init, 0: DeInit */
+    uint8_t     instance;           /* 0: SPIA (MibSpiA), 1: SPIB (MibSpiB) */
+    uint8_t     dataSize;           /* 8 or 16 bits */
+    uint32_t    dataBlockSize;       /* Data block size */
+    uint32_t    bitRate;            /* Hz, e.g., 10000000 */
+    uint8_t     frameFormat;        /* 0-3 mapping to SPI_POLx_PHAx */
+    uint8_t     shiftFormat;        /* 0: MSB First, 1: LSB First */
+    uint8_t     csHold;             /* 1: Enable CS Hold */
+    uint8_t     c2tDelay;           /* Chip select to Transmit delay */
+    uint8_t     t2cDelay;           /* Transmit to Chip select delay */
+    
+    /* DMA Config */
+    uint8_t     dmaEnable;          /* 1: Enable DMA, 0: Blocking Mode */
+    uint8_t     dmaInstance;        /* DMA Instance ID */
+    uint8_t     txDmaChan;          /* TX DMA Channel */
+    uint8_t     rxDmaChan;          /* RX DMA Channel */
+} MmwDemo_SpiCliCfg;
 
 typedef struct {
     uint32_t magicWord;  // 4字节，用于同步
@@ -248,6 +267,7 @@ extern void MmwDemo_notifySensorStart(bool doReconfig);
 extern void MmwDemo_notifySensorStop(void);
 extern int32_t MmwDemo_waitSensorStartComplete(void);
 extern void MmwDemo_waitSensorStopComplete(void);
+extern int32_t MmwDemo_spiConfig(MmwDemo_SpiCliCfg *cfg);
 
 extern void _MmwDemo_mssAssert(int32_t expression, const char *file, int32_t line);
 #define MmwDemo_mssAssert(expression) {                                      \

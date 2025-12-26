@@ -1170,6 +1170,52 @@ static int32_t MmwDemo_CLILvdsStreamCfg (int32_t argc, char* argv[])
 #endif
 
 /**
+ * @b Description
+ * @n
+ * CLI Handler for Advanced SPI Configuration
+ */
+static int32_t MmwDemo_CLISpiConfig(int32_t argc, char* argv[])
+{
+    MmwDemo_SpiCliCfg spiCfg;
+
+    /* Check argument count */
+    /* 我们需要 15 个参数 (命令本身占 argv[0])，所以 argc 至少要是 15 */
+    if (argc < 15)
+    {
+        CLI_write("Error: Invalid usage. Usage: spiConfig <Enable> <Inst> <DataSize> <BlockSize> <BitRate> <FrameFmt> <ShiftFmt> <CsHold> <C2T> <T2C> <DMA_En> <DMA_Inst> <TX_Ch> <RX_Ch>\n");
+        return -1;
+    }
+
+    /* Initialize struct to 0 */
+    memset(&spiCfg, 0, sizeof(MmwDemo_SpiCliCfg));
+
+    /* Parse Arguments */
+    spiCfg.isEnable      = (uint8_t) atoi(argv[1]);
+    spiCfg.instance      = (uint8_t) atoi(argv[2]);
+    spiCfg.dataSize      = (uint8_t) atoi(argv[3]);
+    spiCfg.dataBlockSize = (uint32_t)atoi(argv[4]);
+    spiCfg.bitRate       = (uint32_t)atoi(argv[5]);
+    spiCfg.frameFormat   = (uint8_t) atoi(argv[6]);
+    spiCfg.shiftFormat   = (uint8_t) atoi(argv[7]);
+    spiCfg.csHold        = (uint8_t) atoi(argv[8]);
+    spiCfg.c2tDelay      = (uint8_t) atoi(argv[9]);
+    spiCfg.t2cDelay      = (uint8_t) atoi(argv[10]);
+    
+    /* DMA Config */
+    spiCfg.dmaEnable    = (uint8_t) atoi(argv[11]);
+    spiCfg.dmaInstance  = (uint8_t) atoi(argv[12]);
+    spiCfg.txDmaChan    = (uint8_t) atoi(argv[13]);
+    spiCfg.rxDmaChan    = (uint8_t) atoi(argv[14]);
+
+    /* Call the implementation in mss_main.c */
+    if (MmwDemo_spiConfig(&spiCfg) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+/**
  *  @b Description
  *  @n
  *      This is the CLI Handler for gui monitoring configuration
@@ -1516,6 +1562,11 @@ void MmwDemo_CLIInit (void)
     cliCfg.tableEntry[cnt].cmd            = "motionDetection";
     cliCfg.tableEntry[cnt].helpString     = "<enabled> <threshold> <blockSize> <gainControl>";
     cliCfg.tableEntry[cnt].cmdHandlerFxn  = VitalSignsDemo_CLIMotionDetection;
+    cnt++;
+
+    cliCfg.tableEntry[cnt].cmd            = "spiConfig";
+    cliCfg.tableEntry[cnt].helpString     = "<Enable 1/0> <Inst 0:A/1:B> <DataSize 8/16> <BlockSize> <BitRate> <Fmt 0-3> <Shift 0:MSB/1:LSB> <CsHold> <C2T> <T2C> <DMA_En> <DMA_Inst> <TX_Ch> <RX_Ch>";
+    cliCfg.tableEntry[cnt].cmdHandlerFxn  = MmwDemo_CLISpiConfig;
     cnt++;
 
     /* Open the CLI: */
