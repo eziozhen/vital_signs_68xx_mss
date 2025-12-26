@@ -274,16 +274,29 @@ int32_t MmwDemo_spiConfig(MmwDemo_SpiCliCfg *cfg)
             return -1;
         }
 
-        /* SPIA DMA and interrupt signals are muxed with other IPs in the SOC.
-        * Map them to SPIA.
-        */
-        if (SOC_selectDMARequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+        if (cfg->instance == 0)
         {
-            return;
+            /* SPIA DMA and interrupt signals are muxed with other IPs in the SOC.
+            * Map them to SPIA.
+            */
+            if (SOC_selectDMARequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+            {
+                return -1;
+            }
+            if (SOC_selectInterruptRequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+            {
+                return -1;
+            }
         }
-        if (SOC_selectInterruptRequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIA, &errCode) < 0)
+        else if (cfg->instance == 1)
         {
-            return;
+            /* SPIB DMA signals are muxed with other IPs in the SOC.
+            * Map them to SPIB.
+            */
+            if (SOC_selectDMARequestMapping(socHandle, SOC_MODULE_SPIB, &errCode) < 0)
+            {
+                return -1;
+            }
         }
 
         params.dmaEnable = 1;
