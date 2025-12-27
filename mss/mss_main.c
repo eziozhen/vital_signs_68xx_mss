@@ -114,6 +114,8 @@ uint32_t       gMmwSpiBlockSize = 1024;
 uint32_t       gMmwSpiBlockSize = 128;
 #endif
 
+uint32_t gCounter = 0;
+
 
 /**************************************************************************
  *************************** Extern Definitions *******************************
@@ -293,7 +295,7 @@ int32_t MmwDemo_spiConfig(MmwDemo_SpiCliCfg *cfg)
             /* SPIB DMA signals are muxed with other IPs in the SOC.
             * Map them to SPIB.
             */
-            if (SOC_selectDMARequestMapping(socHandle, SOC_MODULE_SPIB, &errCode) < 0)
+            if (SOC_selectDMARequestMapping(gMmwMssMCB.socHandle, SOC_MODULE_SPIB, &errCode) < 0)
             {
                 return -1;
             }
@@ -668,6 +670,7 @@ static void MmwDemo_mboxReadTask(UArg arg0, UArg arg1)
                         MmwDemo_SpiStartHeader start_header;
                         start_header.magicWord = 0xAA55AA55;
                         start_header.payloadLen = totalBytesToSend;
+                        start_header.seq = gCounter++;
 
                         transaction.count = sizeof(MmwDemo_SpiStartHeader);
                         transaction.txBuf = (void*)&start_header;

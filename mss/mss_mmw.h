@@ -37,6 +37,28 @@
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
+/* Profile
+"sensorStop",
+"flushCfg",
+"dfeDataOutputMode 1",
+"channelCfg 15 7 0",
+"adcCfg 2 1",
+"adcbufCfg -1 0 0 1 3",
+"profileCfg 0 60 80 7 40 0 0 99.975 1 256 8000 0 0 40",
+"chirpCfg 0 0 0 0 0 0 0 1",
+"chirpCfg 1 1 0 0 0 0 0 2",
+"chirpCfg 2 2 0 0 0 0 0 4",
+"frameCfg 0 2 1 0 10 1 0",
+"lowPower 0 1",
+"guiMonitor 0 0 0 0 1",
+"calibDcRangeSig -1 0 0 0 256",
+"vitalSignsCfg 0.3 0.9 256 512 4 0.1 0.05 100000 300000",
+"motionDetection 1 20 2.0 0",
+"spiConfig 1 0 16 1024 36000000 1 0 0 5 5 0 0 255 255"
+*/
+
+
 #ifndef MSS_MMW_DEMO_H
 #define MSS_MMW_DEMO_H
 
@@ -179,6 +201,7 @@ typedef struct MmwDemo_SpiCliCfg_t
 typedef struct {
     uint32_t magicWord;  // 4字节，用于同步
     uint32_t payloadLen; // 4字节，表示后面跟着多少数据
+    uint32_t seq;        // 计数器
 } MmwDemo_SpiStartHeader;
 
 typedef struct {
